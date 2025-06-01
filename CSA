@@ -1,0 +1,48 @@
+`timescale 1ns/10ps
+
+
+
+module CSA(a, b, ci, sum, co);
+
+    parameter N=4;
+    parameter K = N >> 1;
+    
+    input [N-1:0] a;
+    input [N-1:0] b;
+    input ci;
+    output [N-1:0] sum;
+    output co;
+    
+    wire [N-1:0] sum0, sum1; 
+    wire [N-1:0] carry0, carry1;
+    wire [N:0] carry; 
+    
+    assign carry[0] = ci;
+
+    genvar i;
+    generate
+        for (i = 0; i < N; i = i + 1) begin : csa_stage
+            FA fa0 (
+                .a(a[i]), 
+                .b(b[i]), 
+                .ci(1'b0), 
+                .sum(sum0[i]), 
+                .co(carry0[i])
+            );
+
+            FA fa1 (
+                .a(a[i]), 
+                .b(b[i]), 
+                .ci(1'b1), 
+                .sum(sum1[i]), 
+                .co(carry1[i])
+            );
+            
+            assign sum[i] = (carry[i] == 1'b0) ? sum0[i] : sum1[i];
+            assign carry[i+1] = (carry[i] == 1'b0) ? carry0[i] : carry1[i];
+        end
+    endgenerate
+    
+    assign co = carry[N];
+    
+endmodule
