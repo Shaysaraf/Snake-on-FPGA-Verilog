@@ -1,0 +1,222 @@
+`timescale 1ns / 1ps
+
+
+module Snake_Control(
+    input clk,
+    input rstn,
+    input [1:0] GAME_STATE,
+    input [1:0] MOVEMENT,
+    input [6:0] XCoord,        // grid coords 0..99
+    input [6:0] YCoord,        // grid coords 0..74
+    input [13:0] CURRENT_FOOD, // [13:7] food_x, [6:0] food_y
+    output reg [11:0] pixel_color,
+    output reg FOOD_ATE,
+    output reg lose_flag
+);
+    parameter MAX_X = 90;
+    parameter MAX_Y = 65;
+    parameter MIN_X = 10;
+    parameter MIN_Y = 10;
+    parameter MAX_LENGTH = 32;
+    parameter CLK_DIV_THRESHOLD = 23'd5_000_000;
+
+    reg [6:0] SNAKE_X [0:MAX_LENGTH-1];
+    reg [6:0] SNAKE_Y [0:MAX_LENGTH-1];
+    reg [7:0] current_length;
+
+    reg [24:0] clk_div;
+    reg trigger;
+    reg direction_valid;
+
+    wire [6:0] food_x = CURRENT_FOOD[13:7];
+    wire [6:0] food_y = CURRENT_FOOD[6:0];
+    wire food_eaten = (SNAKE_X[0] == food_x) && (SNAKE_Y[0] == food_y);
+
+    // Clock divider for movement trigger
+    always @(posedge clk) begin
+        if (!rstn) begin
+            clk_div <= 0;
+            trigger <= 0;
+        end else if (clk_div == CLK_DIV_THRESHOLD) begin
+            clk_div <= 0;
+            trigger <= 1;
+        end else begin
+            clk_div <= clk_div + 1;
+            trigger <= 0;
+        end
+    end
+
+    // Wait for first movement
+    always @(posedge clk) begin
+        if (!rstn || GAME_STATE == 2'd0 || GAME_STATE == 2'd3)
+            direction_valid <= 0;
+        else if (MOVEMENT != 2'b00 || direction_valid)
+            direction_valid <= 1;
+    end
+
+    // Head movement + food logic
+    always @(posedge clk) begin
+        if (!rstn || GAME_STATE == 2'd0 || GAME_STATE == 2'd3) begin
+            SNAKE_X[0] <= (MAX_X + MIN_X) / 2;
+            SNAKE_Y[0] <= (MAX_Y + MIN_Y) / 2;
+            current_length <= 8'd1;
+            FOOD_ATE <= 0;
+        end else if (trigger && direction_valid) begin
+            case (MOVEMENT)
+                2'd0: SNAKE_Y[0] <= (SNAKE_Y[0] == 0) ? 0 : SNAKE_Y[0] - 1; // Up
+                2'd1: SNAKE_X[0] <= (SNAKE_X[0] == 0) ? 0 : SNAKE_X[0] - 1; // Left
+                2'd2: SNAKE_Y[0] <= (SNAKE_Y[0] == MAX_Y) ? MAX_Y : SNAKE_Y[0] + 1; // Down
+                2'd3: SNAKE_X[0] <= (SNAKE_X[0] == MAX_X) ? MAX_X : SNAKE_X[0] + 1; // Right
+            endcase
+
+            FOOD_ATE <= food_eaten;
+
+            if (food_eaten && current_length < MAX_LENGTH - 1) begin
+                current_length <= current_length + 1;
+            end
+        end else begin
+            FOOD_ATE <= 0;
+        end
+    end
+
+    // Body movement
+    integer i;
+    always @(posedge clk) begin
+        if (!rstn || GAME_STATE == 2'd0 || GAME_STATE == 2'd3) begin
+            for (i = 1; i < MAX_LENGTH; i = i + 1) begin
+                SNAKE_X[i] <= (MAX_X + MIN_X) / 2;
+                SNAKE_Y[i] <= (MAX_Y + MIN_Y) / 2;
+            end
+        end else if (trigger && direction_valid) begin
+            for (i = MAX_LENGTH - 1; i > 0; i = i - 1) begin
+                if (i <= current_length) begin
+                    SNAKE_X[i] <= SNAKE_X[i - 1];
+                    SNAKE_Y[i] <= SNAKE_Y[i - 1];
+                end
+            end
+        end
+    end
+
+    // Collision detection (wall and self)
+    integer j;
+    always @(posedge clk) begin
+        if (!rstn || GAME_STATE == 2'd0 || GAME_STATE == 2'd3) begin
+            lose_flag <= 0;
+        end else begin
+            lose_flag <= 0;
+
+            // Wall collision
+            if (SNAKE_X[0] >= MAX_X || SNAKE_X[0] <= MIN_X ||
+                SNAKE_Y[0] >= MAX_Y || SNAKE_Y[0] <= MIN_Y) begin
+                lose_flag <= 1;
+            end
+
+            // Self collision
+            for (j = 1; j < current_length && j < MAX_LENGTH; j = j + 1) begin
+                if (SNAKE_X[0] == SNAKE_X[j] && SNAKE_Y[0] == SNAKE_Y[j]) begin
+                    lose_flag <= 1;
+                end
+            end
+        end
+    end
+
+    // Color definitions
+    wire [11:0] RED     = 12'hF00;
+    wire [11:0] GREEN   = 12'h0F0;
+    wire [11:0] BLUE    = 12'h00F;
+    wire [11:0] YELLOW  = 12'hFF0;
+    wire [11:0] WHITE   = 12'hFFF;
+    wire [11:0] BLACK   = 12'h000;
+
+    wire IS_BORDER = 
+        (XCoord <= MIN_X || XCoord >= MAX_X||
+         YCoord <= MIN_Y || YCoord >= MAX_Y);
+
+    wire SNAKE_HEAD = (XCoord == SNAKE_X[0]) && (YCoord == SNAKE_Y[0]);
+
+    reg SNAKE_BODY;
+    always @(*) begin
+        SNAKE_BODY = 0;
+        for (j = 1; j < current_length && j < MAX_LENGTH; j = j + 1) begin
+            if ((XCoord == SNAKE_X[j]) && (YCoord == SNAKE_Y[j])) begin
+                SNAKE_BODY = 1;
+            end
+        end
+    end
+    
+    wire FOOD = (XCoord == food_x) && (YCoord == food_y);
+    
+// Snake head shape (including rectangular top, and rounded bottom with layers)
+wire DEAD_SNAKE_HEAD = 
+    ((XCoord >= 30 && XCoord <= 70 && YCoord >= 20 && YCoord <= 50)||  // main rectangle
+     (XCoord >= 40 && XCoord <= 60 && YCoord == 10) ||
+     (XCoord >= 39 && XCoord <= 61 && YCoord == 11) ||
+     (XCoord >= 38 && XCoord <= 62 && YCoord == 12) ||
+     (XCoord >= 37 && XCoord <= 63 && YCoord == 13) ||
+     (XCoord >= 36 && XCoord <= 64 && YCoord == 14) ||
+     (XCoord >= 35 && XCoord <= 65 && YCoord == 15) ||
+     (XCoord >= 34 && XCoord <= 66 && YCoord == 16) ||
+     (XCoord >= 33 && XCoord <= 67 && YCoord == 17) ||
+     (XCoord >= 32 && XCoord <= 68 && YCoord == 18) ||
+     (XCoord >= 31 && XCoord <= 69 && YCoord == 19) ||
+     (XCoord >= 30 && XCoord <= 70 && YCoord == 20));
+
+
+
+// Snake body block
+wire DEAD_SNAKE_BODY = 
+    (XCoord >= 30 && XCoord <= 70 && YCoord >= 51 && YCoord <= 70);
+
+wire DEAD_SNAKE_XX =
+    
+    (((XCoord == 34 || XCoord == 46) && (YCoord == 22 || YCoord == 34)) ||
+     ((XCoord == 35 || XCoord == 45) && (YCoord == 23 || YCoord == 33)) ||
+     ((XCoord == 36 || XCoord == 44) && (YCoord == 24 || YCoord == 32)) ||
+     ((XCoord == 37 || XCoord == 43) && (YCoord == 25 || YCoord == 31)) ||
+     ((XCoord == 38 || XCoord == 42) && (YCoord == 26 || YCoord == 30)) ||
+     ((XCoord == 39 || XCoord == 41) && (YCoord == 27 || YCoord == 29)) ||
+     (XCoord == 40 && YCoord == 28) ||
+
+    
+     ((XCoord == 54 || XCoord == 66) && (YCoord == 22 || YCoord == 34)) ||
+     ((XCoord == 55 || XCoord == 65) && (YCoord == 23 || YCoord == 33)) ||
+     ((XCoord == 56 || XCoord == 64) && (YCoord == 24 || YCoord == 32)) ||
+     ((XCoord == 57 || XCoord == 63) && (YCoord == 25 || YCoord == 31)) ||
+     ((XCoord == 58 || XCoord == 62) && (YCoord == 26 || YCoord == 30)) ||
+     ((XCoord == 59 || XCoord == 61) && (YCoord == 27 || YCoord == 29)) ||
+     (XCoord == 60 && YCoord == 28));
+
+     
+
+
+
+// Pixel color logic
+always @(posedge clk) begin
+    if (!rstn)
+        pixel_color <= GREEN;
+    else if (GAME_STATE == 2'd3) begin // Game Over screen
+        if (!DEAD_SNAKE_XX && DEAD_SNAKE_HEAD)
+            pixel_color <= YELLOW;
+        else if (DEAD_SNAKE_BODY)
+            pixel_color <= BLUE;
+        else if (DEAD_SNAKE_XX)
+            pixel_color <= BLACK;
+        else
+            pixel_color <= RED;
+    end
+    else if (GAME_STATE == 2'd2)
+        pixel_color <= GREEN;
+    else if (SNAKE_HEAD)
+        pixel_color <= YELLOW;
+    else if (SNAKE_BODY)
+        pixel_color <= BLUE;
+    else if (FOOD)
+        pixel_color <= RED;
+    else if (IS_BORDER)
+        pixel_color <= WHITE;
+    else
+        pixel_color <= GREEN;
+end
+
+endmodule
+
