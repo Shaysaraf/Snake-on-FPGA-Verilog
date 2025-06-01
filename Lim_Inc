@@ -1,0 +1,25 @@
+`timescale 1ns / 1ps
+
+
+module Lim_Inc(a, ci, sum, co);
+    
+    parameter L = 10;
+    parameter N = $clog2(L);
+
+    
+    input [N-1:0] a;
+    input ci;
+    output [N-1:0] sum;
+    output co;
+
+    wire [N-1:0] sum0;
+    wire co0;
+    wire [N-1:0] b = {N{1'b0}};
+    
+    CSA csa1 (.a(a), .b(b), .ci(ci), .sum(sum0), .co(co0)); 
+    
+    assign {co, sum} = ((a + ci) >= L) ? {1'b1, {N{1'b0}}} : {co0, sum0};
+
+
+    
+endmodule
