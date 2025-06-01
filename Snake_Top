@@ -1,0 +1,156 @@
+`timescale 1ns / 1ps
+
+
+
+module Snake_Top(
+        // Board base CLK 100MHz (W5)
+            input clk,
+        // Reset button (U18)
+            input rstn,
+            input PS2Clk,
+            input PS2Data,
+            output [6:0] a_to_g,
+            output [3:0] an,
+            output dp,
+        // Colour output for current pixel address
+        output [3:0] vgaRed,
+        output [3:0] vgaGreen, 
+        output [3:0] vgaBlue,
+        // Horizontal and vertical sync
+            output Hsync,
+            output Vsync
+           ); 
+        // Selected display segment determined by strobe counter
+        // and respective score count for said segement.
+            wire FOOD_ATE;  
+            wire [7:0] scancode;
+            wire Right, Left, Up, Down;  
+            wire [15:0] SCORE_COUNT; 
+            wire [1:0] GAME_STATE;
+            wire rstn_db;
+        // Current state in the navigation state machine,
+        // UP, LEFT, DOWN or RIGHT (direction of the snake).
+            wire [1:0]  MOVEMENT;
+            
+        // X and Y pixel address for the VGA controller, 
+        // used to determine the colour output for applied pixel.
+            wire [6:0]  XCoord;
+            wire [6:0]  YCoord;
+            
+        // Random pixel address for the targets random location.
+        // {rnd_x, rnd_y} - concatenation of rnd x and y LFSR's.
+            wire [13:0] CURRENT_FOOD;
+        
+        // Colour input for the VGA controller, sent from the 
+        // snake control module.
+            wire [11:0] pixel_color;
+               
+    /*
+        Instatiation of all the inner modules
+        
+    */
+    
+    Debouncer u_Debouncer(
+    .clk(clk),
+    .input_unstable(rstn),
+    .output_stable(rstn_db)
+    );
+      
+     Ps2_Interface u_Ps2_Interface(
+        .clk(clk),
+        .rstn(!rstn_db), 
+        .PS2Clk(PS2Clk),   
+        .PS2Data(PS2Data),
+        .scancode(scancode),
+        .Right(Right),
+        .Left(Left),
+        .Up(Up), 
+        .Down(Down),
+        .KeyPressed(KeyPressed)
+        );
+        
+        
+
+        
+       // Master state machine:
+       Snake_Game_Mode u_Snake_Game_Mode(
+            .clk(clk),
+            .rstn(!rstn_db),
+            .Left(Left),
+            .Right(Right),
+            .Up(Up),
+            .Down(Down),
+            .SCORE_COUNT(SCORE_COUNT),
+            .STATE(GAME_STATE),
+            .lose_flag(lose_flag)
+            );
+            
+                  
+       // Navigation state machine:
+       Snake_Game_Logic u_Snake_Game_Logic(
+            .clk(clk),
+            .rstn(!rstn_db),
+            .Left(Left),
+            .Right(Right),
+            .Up(Up),
+            .Down(Down),
+            .MOVEMENT(MOVEMENT)
+            );
+              
+       // Snake control
+       Snake_Control u_Snake_Control(
+            .clk(clk),
+            .rstn(!rstn_db),            
+            .GAME_STATE(GAME_STATE),
+            .MOVEMENT(MOVEMENT),
+            .XCoord(XCoord),
+            .YCoord(YCoord),
+            .CURRENT_FOOD(CURRENT_FOOD),
+            .pixel_color(pixel_color),
+            .FOOD_ATE(FOOD_ATE),
+            .lose_flag(lose_flag)
+            );
+               
+       // Score counter
+       Snake_Score_Count u_score_count(
+            .clk(clk),
+            .rstn(!rstn_db),  
+            .FOOD_ATE(FOOD_ATE),
+            .SCORE_COUNT(SCORE_COUNT)
+            );
+                       
+       // Target generator
+       Snake_Food_Randomizer u_Snake_Food_Randomizer(
+            .clk(clk),
+            .rstn(!rstn_db),  
+            .FOOD_ATE(FOOD_ATE),
+            .CURRENT_FOOD(CURRENT_FOOD)
+            );
+                       
+            
+       // 7 segment display interface
+       Seg_7_Display u_Seg_7_Display(
+            .clk(clk),
+            .clr(!rstn_db),
+            .x(SCORE_COUNT),
+            .dp(dp),
+            .an(an),
+            .a_to_g(a_to_g)
+            );
+            
+       // VGA controller interface
+        VGA_interface u_vga_interface (
+            .clk(clk),
+            .rstn(!rstn_db),
+            .pixel_color(pixel_color),
+            .vgaRed(vgaRed),
+            .vgaGreen(vgaGreen),
+            .vgaBlue(vgaBlue),
+            .Hsync(Hsync),
+            .Vsync(Vsync),
+            .XCoord(XCoord),
+            .YCoord(YCoord)
+    );
+       
+   
+endmodule
