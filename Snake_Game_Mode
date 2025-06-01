@@ -1,0 +1,64 @@
+`timescale 1ns / 1ps
+
+
+module Snake_Game_Mode (
+    input clk,
+    input rstn,
+    input Left,
+    input Right,
+    input Up,
+    input Down,
+    input [15:0] SCORE_COUNT,
+    input lose_flag,           // Trigger LOSE state
+    output reg [1:0] STATE     // Current game state output
+);
+
+    // Game states
+    localparam [1:0] IDLE = 2'd0;
+    localparam [1:0] PLAY = 2'd1;
+    localparam [1:0] WIN  = 2'd2;
+    localparam [1:0] LOSE = 2'd3;
+
+    // Internal state register
+    reg [1:0] state_cur, state_nxt;
+
+    // Sequential state update
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn)
+            state_cur <= IDLE;
+        else
+            state_cur <= state_nxt;
+    end
+
+    // Next state logic
+    always @(*) begin
+        case (state_cur)
+            IDLE: begin
+                if (Left || Right || Up || Down)
+                    state_nxt = PLAY;
+                else
+                    state_nxt = IDLE;
+            end
+
+            PLAY: begin
+                if (lose_flag)
+                    state_nxt = LOSE;
+                else if (SCORE_COUNT == 16'd100)
+                    state_nxt = WIN;
+                else
+                    state_nxt = PLAY;
+            end
+
+            WIN:  state_nxt = WIN;
+            LOSE: state_nxt = LOSE;
+
+            default: state_nxt = IDLE;
+        endcase
+    end
+
+    // Output current state
+    always @(*) begin
+        STATE = state_cur;
+    end
+
+endmodule
