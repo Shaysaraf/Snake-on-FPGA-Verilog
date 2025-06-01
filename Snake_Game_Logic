@@ -1,0 +1,55 @@
+`timescale 1ns / 1ps
+
+
+
+module Snake_Game_Logic(
+    input clk,
+    input rstn,
+    input Left,
+    input Right,
+    input Up,
+    input Down,
+    output [1:0] MOVEMENT
+    );
+    
+    // Define parameter definitions for the states
+        localparam [1:0] S_Up     = 2'd0;
+        localparam [1:0] S_Left   = 2'd1;
+        localparam [1:0] S_Down   = 2'd2;
+        localparam [1:0] S_Right  = 2'd3;
+        
+    // Declare current and next state variables
+        reg [1:0] state_cur, state_nxt;
+                
+    // Sequential block
+        always@ (posedge clk or negedge rstn)
+            begin
+                if (!rstn)
+                    state_cur <= S_Up;
+                else
+                    state_cur <= state_nxt; 
+            end
+            
+    // Combinatorial block
+        always@*
+            begin
+                case(state_cur)
+                        S_Up:
+                            state_nxt = (Left  == 1'b1) ? S_Left  : ((Right == 1'b1) ? S_Right : S_Up);
+                        S_Left:
+                            state_nxt = (Down  == 1'b1) ? S_Down  : ((Up    == 1'b1) ? S_Up    : S_Left);
+                        S_Down:
+                            state_nxt = (Left  == 1'b1) ? S_Left  : ((Right == 1'b1) ? S_Right : S_Down);
+                        S_Right:
+                            state_nxt = (Down  == 1'b1) ? S_Down  : ((Up    == 1'b1) ? S_Up    : S_Right);
+                        
+                        default:
+                        state_nxt = Up;
+                        
+                endcase    
+                
+                
+            end
+    assign MOVEMENT = state_cur;
+
+endmodule
