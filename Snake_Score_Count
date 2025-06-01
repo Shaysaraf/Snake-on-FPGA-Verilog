@@ -1,0 +1,42 @@
+`timescale 1ns / 1ps
+
+
+
+module Snake_Score_Count (
+    input clk,
+    input rstn,
+    input FOOD_ATE,
+    output reg [15:0] SCORE_COUNT  // {thousands, hundreds, tens, ones}
+);
+
+    // Decimal digits
+    reg [3:0] ones, tens, hundreds, thousands;
+
+    wire [3:0] ones_next, tens_next, hundreds_next, thousands_next;
+    wire co1, co2, co3, co4;
+
+    // Chained limited incrementers
+    Lim_Inc #(.L(10)) u1 (.a(ones),     .ci(1'b1),  .sum(ones_next),     .co(co1));
+    Lim_Inc #(.L(10)) u2 (.a(tens),     .ci(co1),   .sum(tens_next),     .co(co2));
+    Lim_Inc #(.L(10)) u3 (.a(hundreds), .ci(co2),   .sum(hundreds_next), .co(co3));
+    Lim_Inc #(.L(10)) u4 (.a(thousands),.ci(co3),   .sum(thousands_next),.co(co4));
+
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn) begin
+            ones <= 0;
+            tens <= 0;
+            hundreds <= 0;
+            thousands <= 0;
+            SCORE_COUNT <= 16'b0;
+        end else if (FOOD_ATE) begin
+            ones      <= ones_next;
+            tens      <= tens_next;
+            hundreds  <= hundreds_next;
+            thousands <= thousands_next;
+            SCORE_COUNT <= {thousands, hundreds, tens, ones};
+        end else begin
+            SCORE_COUNT <= {thousands, hundreds, tens, ones};  // Keep updated value
+        end
+    end
+
+endmodule
