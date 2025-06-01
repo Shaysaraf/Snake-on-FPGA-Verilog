@@ -1,0 +1,52 @@
+`timescale 1ns / 1ps
+
+
+
+module Snake_Food_Randomizer(
+    input clk,
+    input rstn,
+    input FOOD_ATE,
+    output reg [13:0] CURRENT_FOOD // [13:7] X, [6:0] Y
+);
+
+    wire [6:0] lfsr_YCoord;
+    wire [6:0] lfsr_XCoord;
+
+    parameter MAX_X_FOOD = 89;
+    parameter MAX_Y_FOOD = 64;
+    parameter MIN_X_FOOD = 11;
+    parameter MIN_Y_FOOD = 11;
+
+    // Visible range
+    localparam RANGE_X = MAX_X_FOOD - MIN_X_FOOD + 1; // = 81
+    localparam RANGE_Y = MAX_Y_FOOD - MIN_Y_FOOD + 1; // = 56
+
+    // LFSRs for X and Y coordinate generation
+    LFSR #(.NUM_BITS(7)) rnd_YCoord (
+        .clk(clk),
+        .rstn(rstn),
+        .out(lfsr_YCoord)
+    );
+
+    LFSR #(.NUM_BITS(7)) rnd_XCoord (
+        .clk(clk),
+        .rstn(rstn),
+        .out(lfsr_XCoord)
+    );
+
+    reg [6:0] safe_x, safe_y;
+
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn) begin
+            safe_x <= 7'd20;
+            safe_y <= 7'd50;
+            CURRENT_FOOD <= {7'd15, 7'd30};
+        end else if (FOOD_ATE) begin
+            // Wrap into valid range and offset by MIN
+            safe_x <= (lfsr_XCoord % RANGE_X) + MIN_X_FOOD;
+            safe_y <= (lfsr_YCoord % RANGE_Y) + MIN_Y_FOOD;
+            CURRENT_FOOD <= {safe_x, safe_y};
+        end
+    end
+
+endmodule
