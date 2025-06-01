@@ -1,0 +1,16 @@
+`timescale 1ns/10ps
+
+
+
+module FA(a, b, ci, sum, co);
+
+  input   a, b, ci;
+  output  sum, co;
+  wire axb;
+  assign axb = a ^ b;
+  assign sum = axb ^ ci;
+  assign co = (a & b) | (ci & axb);
+    
+  
+
+endmodule
