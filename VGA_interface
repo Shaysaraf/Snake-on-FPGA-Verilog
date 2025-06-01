@@ -1,0 +1,78 @@
+`timescale 1ns / 1ps
+
+
+
+module VGA_interface (
+    input clk,         // 100MHz clock
+    input rstn,        // Active-low reset
+    input [11:0] pixel_color,
+    output reg [3:0] vgaRed,
+    output reg [3:0] vgaGreen, 
+    output reg [3:0] vgaBlue, 
+    output reg Hsync, 
+    output reg Vsync, 
+    output reg [6:0] XCoord,   // Downscaled: 0..99 (800/8-1)
+    output reg [6:0] YCoord    // Downscaled: 0..74 (600/8-1)
+);
+
+reg clk_div;         // 1-bit divider counter: divide by 2
+reg [10:0] Hcount;
+reg [10:0] Vcount;
+
+always @(posedge clk or negedge rstn) begin
+    if (!rstn) begin
+        clk_div  <= 1'b0;
+        vgaRed   <= 4'b0;
+        vgaGreen <= 4'b0;
+        vgaBlue  <= 4'b0;
+        Hsync    <= 1;
+        Vsync    <= 1;
+        Hcount   <= 11'b0;
+        Vcount   <= 11'b0;
+        XCoord   <= 7'b0;
+        YCoord   <= 7'b0;
+    end else begin
+        clk_div <= clk_div + 1'b1;  // Divide clock internally by 2
+
+        if (clk_div == 1'b1) begin  // Update every second clk cycle
+            if (Hcount == 1039) begin
+                Hcount <= 0;
+                if (Vcount == 665)
+                    Vcount <= 0;
+                else
+                    Vcount <= Vcount + 1;
+            end else begin
+                Hcount <= Hcount + 1;
+            end
+
+            // Hsync pulse: 856 to 975
+            if (Hcount >= 856 && Hcount < 976)
+                Hsync <= 0; 
+            else
+                Hsync <= 1;
+
+            // Vsync pulse: 637 to 642
+            if (Vcount >= 637 && Vcount < 643)
+                Vsync <= 0; 
+            else
+                Vsync <= 1;
+
+            // Visible area: 800x600 pixels, convert to 100x75 grid
+            if (Hcount < 800 && Vcount < 600) begin
+                vgaRed   <= pixel_color[11:8];
+                vgaGreen <= pixel_color[7:4];
+                vgaBlue  <= pixel_color[3:0];
+                XCoord   <= Hcount[10:3]; // Divide by 8 (shift right 3 bits)
+                YCoord   <= Vcount[10:3]; // Divide by 8
+            end else begin
+                vgaRed   <= 4'b0;
+                vgaGreen <= 4'b0;
+                vgaBlue  <= 4'b0;
+                XCoord   <= 7'b0;
+                YCoord   <= 7'b0;
+            end
+        end
+    end
+end
+
+endmodule
