@@ -1,0 +1,30 @@
+`timescale 1ns / 1ps
+
+
+
+module LFSR #(
+    parameter NUM_BITS = 7
+)(
+    input clk,
+    input rstn,
+    output reg [NUM_BITS-1:0] out
+);
+
+    reg [NUM_BITS-1:0] lfsr_reg;
+    wire feedback;
+
+    // Feedback taps based on a maximal-length LFSR for 7 bits: x^7 + x^6 + 1
+    assign feedback = lfsr_reg[6] ^ lfsr_reg[5];
+
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn)
+            lfsr_reg <= 7'd1;  // Avoid all-zeros state
+        else
+            lfsr_reg <= {lfsr_reg[NUM_BITS-2:0], feedback};
+    end
+
+    always @(*) begin
+        out = lfsr_reg;
+    end
+
+endmodule
