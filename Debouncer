@@ -1,0 +1,30 @@
+`timescale 1ns/10ps
+
+
+
+module Debouncer(clk, input_unstable, output_stable);
+
+   input clk, input_unstable;
+   output reg output_stable;
+   
+   parameter COUNTER_BITS = 7;
+   
+   reg [COUNTER_BITS-1:0] counter; // Hysteresis counter
+   reg last_msb;
+   
+   always @(posedge clk)
+     begin
+        
+        if (input_unstable == 1)
+            counter <= (counter < {COUNTER_BITS{1'b1}}) ? counter  + 1 : counter;
+        else begin
+            counter <= (counter > {COUNTER_BITS{1'b0}}) ? counter  - 1 : counter;
+        end
+        
+        last_msb <= counter[COUNTER_BITS-1];
+
+        
+        output_stable <= (~last_msb) & counter[COUNTER_BITS-1];
+    end
+       
+endmodule
